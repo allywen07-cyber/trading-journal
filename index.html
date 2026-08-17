@@ -141,6 +141,8 @@ tr:hover td { background: var(--surface2); }
   <div class="nav-item" onclick="showPage('charts',this)">📈 &nbsp;Charts</div>
   <div class="nav-section">Confluence Data</div>
   <div class="nav-item" onclick="showPage('confluence',this)">🔗 &nbsp;Confluence Win Rates</div>
+  <div class="nav-section">Coaching</div>
+  <div class="nav-item" onclick="showPage('coach',this)">🤖 &nbsp;Export for Coach</div>
 </nav>
 <main class="main">
 
@@ -304,6 +306,44 @@ tr:hover td { background: var(--surface2); }
   <div id="confluence-content"><div class="loading">Loading data...</div></div>
 </div>
 
+<!-- COACH EXPORT PAGE -->
+<div id="page-coach" class="page">
+  <div class="page-title">Export for Coach</div>
+  <div class="page-sub">Copy this summary and paste it into Claude to get coaching based on your full journal data.</div>
+  <div class="card">
+    <div class="section-title"><span class="num">1</span> Choose what to export</div>
+    <div class="form-grid" style="margin-bottom:16px">
+      <div class="form-group">
+        <label>Date range</label>
+        <select id="coach-range">
+          <option value="all">All time</option>
+          <option value="week">This week</option>
+          <option value="month">This month</option>
+          <option value="last10">Last 10 trades</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Include mental notes?</label>
+        <select id="coach-mental">
+          <option value="yes">Yes — include mental state</option>
+          <option value="no">No — stats only</option>
+        </select>
+      </div>
+    </div>
+    <button class="btn btn-primary" onclick="generateCoachExport()">Generate summary</button>
+  </div>
+  <div id="coach-output" style="display:none">
+    <div class="card">
+      <div class="section-title"><span class="num">2</span> Copy and paste into Claude</div>
+      <div style="margin-bottom:12px;display:flex;gap:10px">
+        <button class="btn btn-primary" onclick="copyCoachExport()">📋 Copy to clipboard</button>
+        <span id="copy-msg" class="msg" style="display:inline-flex;align-items:center"></span>
+      </div>
+      <textarea id="coach-text" style="height:400px;font-size:12px;font-family:monospace;line-height:1.6" readonly></textarea>
+    </div>
+  </div>
+</div>
+
 </main>
 </div>
 
@@ -443,6 +483,7 @@ function showPage(id, el) {
   if (id === 'stats') renderStats();
   if (id === 'charts') setTimeout(renderCharts, 50);
   if (id === 'confluence') renderConfluence();
+  if (id === 'coach') document.getElementById('coach-output').style.display = 'none';
 }
 
 function loadJournal() {
@@ -750,8 +791,61 @@ function renderCharts() {
   },50);
 }
 
+function generateCoachExport() {
+  const range = document.getElementById('coach-range').value;
+  const includeMental = document.getElementById('coach-mental').value === 'yes';
+  let entries = [...allEntries].sort((a,b)=>a.trade_date.localeCompare(b.trade_date)||a.trade_num-b.trade_num);
+  const now = new Date();
+  if(range==='week'){const wa=new Date(now);wa.setDate(now.getDate()-7);entries=entries.filter(e=>new Date(e.trade_date)>=wa);}
+  else if(range==='month'){const mk=now.toISOString().substring(0,7);entries=entries.filter(e=>e.trade_date.startsWith(mk));}
+  else if(range==='last10'){entries=entries.slice(-10);}
+  if(!entries.length){alert('No entries in this range.');return;}
+
+  const wins=entries.filter(e=>e.result==='Win');
+  const losses=entries.filter(e=>e.result==='Loss');
+  const bes=entries.filter(e=>e.result==='BE');
+  const wr=((wins.length/entries.length)*100).toFixed(1);
+  const rrArr=entries.filter(e=>e.rr>0);
+  const avgRR=rrArr.length?(rrArr.reduce((s,e)=>s+e.rr,0)/rrArr.length).toFixed(2):'N/A';
+  const winRRArr=wins.filter(e=>e.rr>0);
+  const avgWinRR=winRRArr.length?(winRRArr.reduce((s,e)=>s+e.rr,0)/winRRArr.length).toFixed(2):'N/A';
+  const bestRR=rrArr.length?Math.max(...rrArr.map(e=>e.rr)).toFixed(2):'N/A';
+
+  const confStats={};
+  entries.forEach(e=>{[...(e.confluences||[]),...(e.conf_other?[e.conf_other]:[])].forEach(c=>{confStats[c]=confStats[c]||{total:0,wins:0};confStats[c].total++;if(e.result==='Win')confStats[c].wins++;});});
+
+  const tradeNumStats={};
+  entries.forEach(e=>{const n=e.trade_num||1;tradeNumStats[n]=tradeNumStats[n]||{total:0,wins:0};tradeNumStats[n].total++;if(e.result==='Win')tradeNumStats[n].wins++;});
+
+  let out=`=== TRADING JOURNAL EXPORT FOR COACH ===\nGenerated: ${new Date().toLocaleDateString('en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'})}\nRange: ${range==='all'?'All time':range==='week'?'This week':range==='month'?'This month':'Last 10 trades'}\n\n--- OVERALL STATS ---\nTotal trades: ${entries.length}\nWins: ${wins.length} | Losses: ${losses.length} | Breakevens: ${bes.length}\nWin rate: ${wr}%\nAvg RR: ${avgRR} | Avg win RR: ${avgWinRR} | Best RR: ${bestRR}\n\n--- WIN RATE BY TRADE NUMBER ---\n${Object.entries(tradeNumStats).sort((a,b)=>a[0]-b[0]).map(([n,d])=>`Trade ${n}: ${d.wins}/${d.total} (${Math.round((d.wins/d.total)*100)}%)`).join('\n')}\n\n--- CONFLUENCE WIN RATES ---\n${Object.entries(confStats).sort((a,b)=>(b[1].wins/b[1].total)-(a[1].wins/a[1].total)).map(([c,d])=>`${c}: ${d.wins}/${d.total} (${Math.round((d.wins/d.total)*100)}%)`).join('\n')||'No confluence data'}\n\n--- TRADE BY TRADE ---\n`;
+
+  entries.forEach(e=>{
+    const d=new Date(e.trade_date+'T12:00:00');
+    const dl=d.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'});
+    out+=`\n[${dl} — Trade ${e.trade_num}]\nResult: ${e.result} | RR: ${e.rr||'N/A'} | Entry: ${e.entry_time||'N/A'} | Exit: ${e.exit_time||'N/A'} | Duration: ${e.duration_mins?e.duration_mins+'min':'N/A'} | TF: ${e.entry_tf||'N/A'}\nSL: ${e.sl_pts||'N/A'} pts | TP: ${e.tp_pts||'N/A'} pts\nConfluences: ${[...(e.confluences||[]),...(e.conf_other?[e.conf_other]:[])].join(', ')||'None'}\nDOL: ${[...(e.dols||[]),...(e.dol_other?[e.dol_other]:[])].join(', ')||'None'}`;
+    if(includeMental){if(e.mental_pre)out+=`\nPre-session: ${e.mental_pre}`;if(e.mental_during)out+=`\nDuring session: ${e.mental_during}`;if(e.mental_entry)out+=`\nBefore entry: ${e.mental_entry}`;if(e.mental_trade)out+=`\nDuring trade: ${e.mental_trade}`;}
+    if(e.notes_good)out+=`\nWhat went well: ${e.notes_good}`;
+    if(e.notes_bad)out+=`\nWhat to improve: ${e.notes_bad}`;
+    if(e.notes_lesson)out+=`\nKey lesson: ${e.notes_lesson}`;
+    out+='\n';
+  });
+  out+='\n=== END OF EXPORT ===';
+  document.getElementById('coach-text').value=out;
+  document.getElementById('coach-output').style.display='block';
+  document.getElementById('coach-output').scrollIntoView({behavior:'smooth'});
+}
+
+function copyCoachExport() {
+  navigator.clipboard.writeText(document.getElementById('coach-text').value).then(()=>{
+    const msg=document.getElementById('copy-msg');
+    msg.textContent='✓ Copied! Paste it into Claude.';
+    msg.className='msg msg-success';
+    msg.style.display='inline-flex';
+    setTimeout(()=>{msg.textContent='';msg.style.display='none';},4000);
+  });
+}
+
 function renderConfluence() {
-  const el = document.getElementById('confluence-content');
   if (!allEntries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🔗</div>No entries yet.</div>'; return; }
 
   const confStats={};const dolStats={};

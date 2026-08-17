@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Trading Journal</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --bg: #0D1117; --surface: #161B22; --surface2: #1C2128;
+  --border: #21262D; --text: #E6EDF3; --muted: #8B949E; --dim: #6E7681;
+  --green: #00C853; --green-bg: rgba(0,200,83,0.12);
+  --red: #F85149; --red-bg: rgba(248,81,73,0.12);
+  --amber: #F0B429; --amber-bg: rgba(240,180,41,0.12);
+  --blue: #58A6FF; --blue-bg: rgba(88,166,255,0.12);
+  --radius: 8px; --radius-lg: 12px;
+}
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 14px; min-height: 100vh; }
+.app { display: flex; min-height: 100vh; }
+.sidebar { width: 230px; background: var(--surface); border-right: 1px solid var(--border); padding: 24px 0; flex-shrink: 0; position: sticky; top: 0; height: 100vh; overflow-y: auto; }
+.main { flex: 1; padding: 32px; overflow-x: hidden; }
+.logo { padding: 0 20px 24px; border-bottom: 1px solid var(--border); margin-bottom: 16px; }
+.logo-title { font-size: 16px; font-weight: 700; color: var(--text); }
+.logo-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.nav-section { font-size: 10px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; padding: 12px 20px 6px; }
+.nav-item { display: flex; align-items: center; gap: 10px; padding: 8px 20px; cursor: pointer; color: var(--muted); font-size: 13px; border-left: 2px solid transparent; transition: all 0.15s; }
+.nav-item:hover { color: var(--text); background: var(--surface2); }
+.nav-item.active { color: var(--text); background: var(--surface2); border-left-color: var(--green); font-weight: 500; }
+.page { display: none; } .page.active { display: block; }
+.page-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+.page-sub { color: var(--muted); font-size: 13px; margin-bottom: 28px; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-bottom: 16px; }
+.section-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 16px; padding-bottom: 10px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.section-title .num { width: 22px; height: 22px; background: var(--green); color: #0D1117; border-radius: 50%; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+input, select, textarea { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 12px; color: var(--text); font-size: 13px; width: 100%; outline: none; font-family: inherit; transition: border-color 0.15s; }
+input:focus, select:focus, textarea:focus { border-color: var(--blue); }
+textarea { resize: vertical; min-height: 80px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 12px; }
+.form-group label { font-size: 12px; color: var(--muted); font-weight: 500; }
+.form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.form-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+.checkbox-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.checkbox-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); cursor: pointer; transition: all 0.15s; }
+.checkbox-item:hover { border-color: var(--blue); }
+.checkbox-item input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--green); cursor: pointer; flex-shrink: 0; }
+.checkbox-item label { font-size: 12px; color: var(--muted); cursor: pointer; line-height: 1.3; }
+.checkbox-item.checked { background: var(--green-bg); border-color: var(--green); }
+.checkbox-item.checked label { color: var(--green); }
+.other-input { margin-top: 8px; }
+.upload-area { border: 2px dashed var(--border); border-radius: var(--radius-lg); padding: 32px; text-align: center; cursor: pointer; transition: all 0.15s; position: relative; }
+.upload-area:hover, .upload-area.drag { border-color: var(--blue); background: var(--blue-bg); }
+.upload-area input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; }
+.upload-icon { font-size: 32px; margin-bottom: 8px; }
+.upload-text { color: var(--muted); font-size: 13px; }
+.upload-preview { margin-top: 12px; }
+.upload-preview img { max-width: 100%; max-height: 300px; border-radius: var(--radius); border: 1px solid var(--border); }
+.btn { padding: 10px 22px; border-radius: var(--radius); border: none; cursor: pointer; font-size: 13px; font-weight: 600; transition: all 0.15s; }
+.btn-primary { background: var(--green); color: #0D1117; }
+.btn-primary:hover { opacity: 0.88; }
+.btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+.btn-secondary:hover { border-color: var(--muted); }
+.btn-danger { background: var(--red-bg); color: var(--red); border: 1px solid transparent; padding: 5px 12px; font-size: 12px; }
+.btn-row { display: flex; gap: 10px; align-items: center; margin-top: 20px; }
+.msg { font-size: 12px; padding: 8px 12px; border-radius: var(--radius); }
+.msg-success { background: var(--green-bg); color: var(--green); }
+.msg-error { background: var(--red-bg); color: var(--red); }
+.badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.badge-win { background: var(--green-bg); color: var(--green); }
+.badge-loss { background: var(--red-bg); color: var(--red); }
+.badge-be { background: var(--amber-bg); color: var(--amber); }
+.metric-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric-grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 16px; }
+.metric { background: var(--surface2); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; }
+.metric-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 6px; }
+.metric-val { font-size: 22px; font-weight: 700; }
+.metric-val.green { color: var(--green); } .metric-val.red { color: var(--red); } .metric-val.amber { color: var(--amber); } .metric-val.blue { color: var(--blue); }
+.stat-section { font-size: 11px; font-weight: 600; color: var(--dim); text-transform: uppercase; letter-spacing: 0.08em; margin: 24px 0 10px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.breakdown-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--border); font-size: 13px; }
+.breakdown-row:last-child { border-bottom: none; }
+.bar-track { height: 4px; background: var(--border); border-radius: 2px; width: 80px; }
+.bar-fill { height: 100%; border-radius: 2px; background: var(--green); }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+th { text-align: left; padding: 8px 12px; font-size: 11px; color: var(--muted); border-bottom: 1px solid var(--border); font-weight: 500; text-transform: uppercase; }
+td { padding: 9px 12px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+tr:last-child td { border-bottom: none; }
+tr:hover td { background: var(--surface2); }
+.empty { text-align: center; padding: 48px; color: var(--muted); font-size: 13px; }
+.empty-icon { font-size: 36px; margin-bottom: 12px; }
+.trade-entry { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); margin-bottom: 12px; overflow: hidden; }
+.trade-entry-header { display: flex; align-items: center; gap: 12px; padding: 14px 18px; cursor: pointer; background: var(--surface2); }
+.trade-entry-header:hover { background: var(--border); }
+.trade-entry-title { font-weight: 600; font-size: 14px; }
+.trade-entry-meta { font-size: 12px; color: var(--muted); }
+.trade-entry-body { padding: 18px; display: none; }
+.trade-entry-body.open { display: block; }
+.trade-img { max-width: 100%; max-height: 350px; border-radius: var(--radius); border: 1px solid var(--border); margin-bottom: 16px; }
+.confluence-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+.conf-tag { padding: 3px 10px; background: var(--blue-bg); color: var(--blue); border-radius: 20px; font-size: 11px; font-weight: 500; }
+.dol-tag { padding: 3px 10px; background: var(--amber-bg); color: var(--amber); border-radius: 20px; font-size: 11px; font-weight: 500; }
+.detail-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px; }
+.detail-item { background: var(--surface2); border-radius: var(--radius); padding: 10px 12px; }
+.detail-label { font-size: 10px; color: var(--muted); text-transform: uppercase; margin-bottom: 3px; }
+.detail-val { font-size: 14px; font-weight: 600; }
+.mental-section { background: var(--surface2); border-radius: var(--radius); padding: 12px; margin-bottom: 10px; }
+.mental-label { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; margin-bottom: 4px; }
+.mental-text { font-size: 13px; color: var(--text); line-height: 1.5; }
+.week-group { margin-bottom: 28px; }
+.week-header { font-size: 14px; font-weight: 600; color: var(--text); padding: 10px 0; border-bottom: 2px solid var(--border); margin-bottom: 12px; display: flex; align-items: center; justify-content: space-between; }
+.day-group { margin-bottom: 16px; }
+.day-header { font-size: 13px; font-weight: 500; color: var(--muted); padding: 6px 0; display: flex; gap: 10px; align-items: center; }
+.month-group { margin-bottom: 36px; }
+.month-header { font-size: 18px; font-weight: 700; color: var(--text); padding: 12px 0; border-bottom: 2px solid var(--green); margin-bottom: 16px; }
+.chart-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+.chart-wrap { position: relative; width: 100%; }
+.loading { text-align: center; padding: 24px; color: var(--muted); }
+.filter-bar { display: flex; gap: 8px; margin-bottom: 20px; flex-wrap: wrap; }
+.filter-bar select { width: auto; font-size: 12px; padding: 6px 10px; }
+@media (max-width: 768px) {
+  .sidebar { display: none; } .main { padding: 16px; }
+  .metric-grid { grid-template-columns: repeat(2,1fr); }
+  .checkbox-grid { grid-template-columns: repeat(2,1fr); }
+  .chart-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+<nav class="sidebar">
+  <div class="logo">
+    <div class="logo-title">📈 Trading Journal</div>
+    <div class="logo-sub">ICT Methodology · MNQ · MGC</div>
+  </div>
+  <div class="nav-section">Journal</div>
+  <div class="nav-item active" onclick="showPage('journal',this)">📋 &nbsp;All Entries</div>
+  <div class="nav-item" onclick="showPage('add',this)">➕ &nbsp;New Entry</div>
+  <div class="nav-section">Analytics</div>
+  <div class="nav-item" onclick="showPage('stats',this)">📊 &nbsp;Stats & Data</div>
+  <div class="nav-item" onclick="showPage('charts',this)">📈 &nbsp;Charts</div>
+  <div class="nav-section">Confluence Data</div>
+  <div class="nav-item" onclick="showPage('confluence',this)">🔗 &nbsp;Confluence Win Rates</div>
+</nav>
+<main class="main">
+
+<!-- JOURNAL PAGE -->
+<div id="page-journal" class="page active">
+  <div class="page-title">Trade Journal</div>
+  <div class="page-sub">All entries organized by month → week → day.</div>
+  <div class="filter-bar">
+    <select id="fj-result" onchange="loadJournal()"><option value="">All results</option><option>Win</option><option>Loss</option><option>BE</option></select>
+    <select id="fj-month" onchange="loadJournal()"><option value="">All months</option></select>
+  </div>
+  <div id="journal-content"><div class="loading">Loading entries...</div></div>
+</div>
+
+<!-- ADD ENTRY PAGE -->
+<div id="page-add" class="page">
+  <div class="page-title">New Journal Entry</div>
+  <div class="page-sub">Log a trade with full detail. Each trade gets its own entry.</div>
+
+  <!-- Section 1: Screenshot -->
+  <div class="card">
+    <div class="section-title"><span class="num">1</span> Trade Screenshot</div>
+    <div class="upload-area" id="upload-area">
+      <input type="file" id="screenshot-input" accept="image/*" onchange="handleImageUpload(this)">
+      <div class="upload-icon">📸</div>
+      <div class="upload-text">Click to upload or drag & drop your chart screenshot</div>
+    </div>
+    <div class="upload-preview" id="upload-preview"></div>
+  </div>
+
+  <!-- Section 2: Confluences -->
+  <div class="card">
+    <div class="section-title"><span class="num">2</span> Confluences</div>
+    <div class="checkbox-grid" id="confluence-grid">
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="HTF SMT"><label>HTF SMT</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="LTF SMT"><label>LTF SMT</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="IFVG"><label>IFVG</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="CISD"><label>CISD</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="5min PD Array"><label>5min PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="15min PD Array"><label>15min PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="1hr PD Array"><label>1hr PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="4hr PD Array"><label>4hr PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="Daily PD Array"><label>Daily PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="Weekly PD Array"><label>Weekly PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="Monthly PD Array"><label>Monthly PD Array</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="LTF Rejection Block"><label>LTF Rejection Block</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="HTF Rejection Block"><label>HTF Rejection Block</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="With HTF Trend"><label>With HTF Trend</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="conf" value="Against HTF Trend"><label>Against HTF Trend</label></div>
+    </div>
+    <div class="other-input">
+      <div class="form-group"><label>Other confluences</label><input type="text" id="conf-other" placeholder="Any additional confluences..."></div>
+    </div>
+  </div>
+
+  <!-- Section 3: DOL -->
+  <div class="card">
+    <div class="section-title"><span class="num">3</span> DOL (Draw on Liquidity)</div>
+    <div class="checkbox-grid" id="dol-grid">
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="REQHs/REQLs"><label>REQHs / REQLs</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Equal Highs/Lows"><label>Equal Highs / Lows</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="London High"><label>London High</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="London Low"><label>London Low</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Asia High"><label>Asia High</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Asia Low"><label>Asia Low</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Data Wick"><label>Data Wick</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Current Session High"><label>Current Session High</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Current Session Low"><label>Current Session Low</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PDH"><label>PDH</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PDL"><label>PDL</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PWH"><label>PWH</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PWL"><label>PWL</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PMH"><label>PMH</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="PML"><label>PML</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Unmitigated HTF FVG"><label>Unmitigated HTF FVG</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Mitigated HTF FVG"><label>Mitigated HTF FVG</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="1st Presented FVG"><label>1st Presented FVG</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="LRL"><label>LRL</label></div>
+      <div class="checkbox-item" onclick="toggleCheck(this)"><input type="checkbox" name="dol" value="Trendline Liquidity"><label>Trendline Liquidity</label></div>
+    </div>
+    <div class="other-input">
+      <div class="form-group"><label>Other DOLs</label><input type="text" id="dol-other" placeholder="Any additional DOLs..."></div>
+    </div>
+  </div>
+
+  <!-- Section 4: Stats -->
+  <div class="card">
+    <div class="section-title"><span class="num">4</span> Stats</div>
+    <div class="form-grid">
+      <div class="form-group"><label>Trade Date</label><input type="date" id="s-date"></div>
+      <div class="form-group"><label>Result</label>
+        <select id="s-result">
+          <option value="Win">Win</option>
+          <option value="Loss">Loss</option>
+          <option value="BE">Breakeven</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Entry Time</label><input type="time" id="s-entry-time"></div>
+      <div class="form-group"><label>Exit Time</label><input type="time" id="s-exit-time"></div>
+    </div>
+    <div class="form-grid">
+      <div class="form-group"><label>Entry Timeframe</label>
+        <select id="s-tf">
+          <option>1min</option><option>2min</option><option>3min</option><option>5min</option>
+          <option>15min</option><option>30min</option><option>1hr</option><option>4hr</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Duration (mins)</label><input type="number" id="s-duration" placeholder="19" min="0"></div>
+    </div>
+    <div class="form-grid-3">
+      <div class="form-group"><label>SL (points)</label><input type="number" id="s-sl" placeholder="64" min="0" oninput="calcRR()"></div>
+      <div class="form-group"><label>TP (points)</label><input type="number" id="s-tp" placeholder="123" min="0" oninput="calcRR()"></div>
+      <div class="form-group"><label>RR (auto-fills)</label><input type="number" id="s-rr" placeholder="1.9" step="0.01"></div>
+    </div>
+  </div>
+
+  <!-- Section 5: Mental -->
+  <div class="card">
+    <div class="section-title"><span class="num">5</span> Mental</div>
+    <div class="form-group"><label>Pre-session — How were you feeling before the session?</label><textarea id="m-pre" placeholder="e.g. Calm, focused, had a clear bias going in..."></textarea></div>
+    <div class="form-group"><label>During session — How did you feel as the session unfolded?</label><textarea id="m-during" placeholder="e.g. Price action was clear, I was patient waiting for the setup..."></textarea></div>
+    <div class="form-group"><label>Right before entry — What was your mental state at entry?</label><textarea id="m-entry" placeholder="e.g. Confident in the setup, all confluences aligned..."></textarea></div>
+    <div class="form-group"><label>During the trade — How did you feel while in the trade?</label><textarea id="m-trade" placeholder="e.g. Felt good, didn't touch the trade, let it play out..."></textarea></div>
+  </div>
+
+  <!-- Section 6: Notes -->
+  <div class="card">
+    <div class="section-title"><span class="num">6</span> Notes</div>
+    <div class="form-group"><label>What went well?</label><textarea id="n-good" placeholder="e.g. Clean entry, good SL placement, held to TP..."></textarea></div>
+    <div class="form-group"><label>What could be improved?</label><textarea id="n-bad" placeholder="e.g. Could have sized up, SL was a bit tight..."></textarea></div>
+    <div class="form-group"><label>Key lesson from this trade</label><textarea id="n-lesson" placeholder="e.g. Trust the setup once all confluences align..."></textarea></div>
+  </div>
+
+  <div class="btn-row">
+    <button class="btn btn-primary" onclick="saveEntry()">Save Entry</button>
+    <button class="btn btn-secondary" onclick="clearForm()">Clear Form</button>
+    <span id="save-msg"></span>
+  </div>
+</div>
+
+<!-- STATS PAGE -->
+<div id="page-stats" class="page">
+  <div class="page-title">Stats & Data</div>
+  <div class="page-sub">All stats calculated from your journal entries.</div>
+  <div id="stats-content"><div class="loading">Loading stats...</div></div>
+</div>
+
+<!-- CHARTS PAGE -->
+<div id="page-charts" class="page">
+  <div class="page-title">Charts</div>
+  <div class="page-sub">Visual breakdowns of your trading data.</div>
+  <div id="charts-content"><div class="loading">Loading charts...</div></div>
+</div>
+
+<!-- CONFLUENCE PAGE -->
+<div id="page-confluence" class="page">
+  <div class="page-title">Confluence Win Rates</div>
+  <div class="page-sub">How each confluence and DOL affects your win rate.</div>
+  <div id="confluence-content"><div class="loading">Loading data...</div></div>
+</div>
+
+</main>
+</div>
+
+<script>
+const SUPABASE_URL = 'https://iiiygpkwqasfdpnhhtiq.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlpaXlncGt3cWFzZmRwbmhodGlxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5MjUzNjAsImV4cCI6MjEwMjUwMTM2MH0.sa34HPE3pkqSY7YIUk11EEQQyoXjWMe3hhumc1IuYj4';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+let allEntries = [];
+let chartInstances = {};
+let screenshotBase64 = null;
+
+// Init
+document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+loadAllEntries();
+
+async function loadAllEntries() {
+  const { data, error } = await sb.from('journal_entries').select('*').order('trade_date', { ascending: false }).order('created_at', { ascending: true });
+  if (error) { console.error(error); return; }
+  allEntries = data || [];
+  populateMonthFilter();
+  loadJournal();
+}
+
+function populateMonthFilter() {
+  const sel = document.getElementById('fj-month');
+  const months = [...new Set(allEntries.map(e => e.trade_date?.substring(0,7)))].filter(Boolean).sort().reverse();
+  sel.innerHTML = '<option value="">All months</option>' + months.map(m => {
+    const [y,mo] = m.split('-');
+    const label = new Date(y, mo-1).toLocaleDateString('en-US', {month:'long', year:'numeric'});
+    return `<option value="${m}">${label}</option>`;
+  }).join('');
+}
+
+function toggleCheck(el) {
+  const cb = el.querySelector('input[type="checkbox"]');
+  cb.checked = !cb.checked;
+  el.classList.toggle('checked', cb.checked);
+}
+
+function calcRR() {
+  const sl = parseFloat(document.getElementById('s-sl').value) || 0;
+  const tp = parseFloat(document.getElementById('s-tp').value) || 0;
+  if (sl > 0 && tp > 0) document.getElementById('s-rr').value = (tp/sl).toFixed(2);
+}
+
+function handleImageUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    screenshotBase64 = e.target.result;
+    document.getElementById('upload-preview').innerHTML = `<img src="${screenshotBase64}" style="max-width:100%;max-height:300px;border-radius:8px;border:1px solid var(--border);margin-top:12px">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function getChecked(name) {
+  return [...document.querySelectorAll(`input[name="${name}"]:checked`)].map(c => c.value);
+}
+
+async function saveEntry() {
+  const date = document.getElementById('s-date').value;
+  if (!date) { showMsg('save-msg', 'Please enter a trade date.', 'error'); return; }
+  const sl = parseFloat(document.getElementById('s-sl').value) || 0;
+  const tp = parseFloat(document.getElementById('s-tp').value) || 0;
+  const rr = parseFloat(document.getElementById('s-rr').value) || (sl > 0 && tp > 0 ? parseFloat((tp/sl).toFixed(2)) : 0);
+
+  // Get trade number for the day
+  const dayEntries = allEntries.filter(e => e.trade_date === date);
+  const tradeNum = dayEntries.length + 1;
+
+  const entry = {
+    trade_date: date,
+    trade_num: tradeNum,
+    screenshot: screenshotBase64,
+    confluences: getChecked('conf'),
+    conf_other: document.getElementById('conf-other').value,
+    dols: getChecked('dol'),
+    dol_other: document.getElementById('dol-other').value,
+    entry_time: document.getElementById('s-entry-time').value,
+    exit_time: document.getElementById('s-exit-time').value,
+    entry_tf: document.getElementById('s-tf').value,
+    duration_mins: parseInt(document.getElementById('s-duration').value) || null,
+    sl_pts: sl || null,
+    tp_pts: tp || null,
+    rr: rr || null,
+    result: document.getElementById('s-result').value,
+    mental_pre: document.getElementById('m-pre').value,
+    mental_during: document.getElementById('m-during').value,
+    mental_entry: document.getElementById('m-entry').value,
+    mental_trade: document.getElementById('m-trade').value,
+    notes_good: document.getElementById('n-good').value,
+    notes_bad: document.getElementById('n-bad').value,
+    notes_lesson: document.getElementById('n-lesson').value,
+  };
+
+  const btn = document.querySelector('.btn-primary');
+  btn.textContent = 'Saving...';
+  btn.disabled = true;
+
+  const { error } = await sb.from('journal_entries').insert([entry]);
+  btn.textContent = 'Save Entry';
+  btn.disabled = false;
+
+  if (error) {
+    showMsg('save-msg', 'Error saving: ' + error.message, 'error');
+  } else {
+    showMsg('save-msg', '✓ Entry saved!', 'success');
+    clearForm();
+    loadAllEntries();
+  }
+}
+
+function clearForm() {
+  document.querySelectorAll('.checkbox-item').forEach(el => { el.classList.remove('checked'); el.querySelector('input').checked = false; });
+  ['conf-other','dol-other','s-entry-time','s-exit-time','s-duration','s-sl','s-tp','s-rr','m-pre','m-during','m-entry','m-trade','n-good','n-bad','n-lesson'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('s-date').value = new Date().toISOString().split('T')[0];
+  document.getElementById('upload-preview').innerHTML = '';
+  screenshotBase64 = null;
+  document.getElementById('screenshot-input').value = '';
+}
+
+function showMsg(id, text, type) {
+  const el = document.getElementById(id);
+  el.textContent = text;
+  el.className = 'msg msg-' + type;
+  setTimeout(() => el.textContent = '', 4000);
+}
+
+function showPage(id, el) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  if (el) el.classList.add('active');
+  if (id === 'journal') loadJournal();
+  if (id === 'stats') renderStats();
+  if (id === 'charts') setTimeout(renderCharts, 50);
+  if (id === 'confluence') renderConfluence();
+}
+
+function loadJournal() {
+  const resFilter = document.getElementById('fj-result')?.value || '';
+  const monthFilter = document.getElementById('fj-month')?.value || '';
+  let entries = [...allEntries];
+  if (resFilter) entries = entries.filter(e => e.result === resFilter);
+  if (monthFilter) entries = entries.filter(e => e.trade_date?.startsWith(monthFilter));
+
+  const el = document.getElementById('journal-content');
+  if (!entries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📋</div>No entries yet. Add your first trade!</div>'; return; }
+
+  // Group by month → week → day
+  const byMonth = {};
+  entries.forEach(e => {
+    const d = new Date(e.trade_date + 'T12:00:00');
+    const monthKey = e.trade_date.substring(0,7);
+    const weekNum = getWeekNumber(d);
+    const weekKey = `${d.getFullYear()}-W${weekNum}`;
+    if (!byMonth[monthKey]) byMonth[monthKey] = {};
+    if (!byMonth[monthKey][weekKey]) byMonth[monthKey][weekKey] = {};
+    if (!byMonth[monthKey][weekKey][e.trade_date]) byMonth[monthKey][weekKey][e.trade_date] = [];
+    byMonth[monthKey][weekKey][e.trade_date].push(e);
+  });
+
+  let html = '';
+  Object.keys(byMonth).sort().reverse().forEach(monthKey => {
+    const [y,m] = monthKey.split('-');
+    const monthLabel = new Date(y, m-1).toLocaleDateString('en-US', {month:'long', year:'numeric'});
+    const monthEntries = Object.values(byMonth[monthKey]).flatMap(w => Object.values(w).flat());
+    const mWins = monthEntries.filter(e=>e.result==='Win').length;
+    const mWR = ((mWins/monthEntries.length)*100).toFixed(0);
+    html += `<div class="month-group"><div class="month-header">${monthLabel} <span style="font-size:14px;color:var(--muted);font-weight:400">${monthEntries.length} trades · ${mWR}% win rate</span></div>`;
+
+    Object.keys(byMonth[monthKey]).sort().reverse().forEach(weekKey => {
+      const weekEntries = Object.values(byMonth[monthKey][weekKey]).flat();
+      const wWins = weekEntries.filter(e=>e.result==='Win').length;
+      const wWR = ((wWins/weekEntries.length)*100).toFixed(0);
+      const weekDates = Object.keys(byMonth[monthKey][weekKey]).sort();
+      const weekStart = new Date(weekDates[0]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      const weekEnd = new Date(weekDates[weekDates.length-1]+'T12:00:00').toLocaleDateString('en-US',{month:'short',day:'numeric'});
+      html += `<div class="week-group"><div class="week-header"><span>Week of ${weekStart} – ${weekEnd}</span><span style="font-size:12px;color:var(--muted)">${weekEntries.length} trades · ${wWR}% win rate</span></div>`;
+
+      Object.keys(byMonth[monthKey][weekKey]).sort().reverse().forEach(dateKey => {
+        const dayEntries = byMonth[monthKey][weekKey][dateKey];
+        const d = new Date(dateKey+'T12:00:00');
+        const dateLabel = d.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric'});
+        const dWins = dayEntries.filter(e=>e.result==='Win').length;
+        html += `<div class="day-group"><div class="day-header"><span>${dateLabel}</span><span>${dWins}W ${dayEntries.filter(e=>e.result==='Loss').length}L ${dayEntries.filter(e=>e.result==='BE').length}BE</span></div>`;
+        dayEntries.forEach(e => { html += renderTradeEntry(e); });
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  });
+  el.innerHTML = html;
+}
+
+function renderTradeEntry(e) {
+  const badge = `<span class="badge badge-${e.result?.toLowerCase()}">${e.result}</span>`;
+  const rrColor = e.rr >= 2 ? 'var(--green)' : e.rr >= 1 ? 'var(--amber)' : 'var(--red)';
+  return `<div class="trade-entry">
+    <div class="trade-entry-header" onclick="toggleEntry(this)">
+      <span style="font-size:16px">📊</span>
+      <div>
+        <div class="trade-entry-title">Trade ${e.trade_num} &nbsp;${badge}</div>
+        <div class="trade-entry-meta">${e.entry_time||'—'} · ${e.entry_tf||'—'} · ${e.duration_mins ? e.duration_mins+'min' : '—'} · RR: <span style="color:${rrColor}">${e.rr||'—'}</span></div>
+      </div>
+      <span style="margin-left:auto;font-size:18px;color:var(--muted)">›</span>
+    </div>
+    <div class="trade-entry-body">
+      ${e.screenshot ? `<img src="${e.screenshot}" class="trade-img">` : ''}
+      ${e.confluences?.length ? `<div style="margin-bottom:10px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">Confluences</div><div class="confluence-tags">${e.confluences.map(c=>`<span class="conf-tag">${c}</span>`).join('')}${e.conf_other?`<span class="conf-tag">${e.conf_other}</span>`:''}</div></div>` : ''}
+      ${e.dols?.length ? `<div style="margin-bottom:14px"><div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:6px">DOL</div><div class="confluence-tags">${e.dols.map(d=>`<span class="dol-tag">${d}</span>`).join('')}${e.dol_other?`<span class="dol-tag">${e.dol_other}</span>`:''}</div></div>` : ''}
+      <div class="detail-grid">
+        <div class="detail-item"><div class="detail-label">Entry</div><div class="detail-val">${e.entry_time||'—'}</div></div>
+        <div class="detail-item"><div class="detail-label">Duration</div><div class="detail-val">${e.duration_mins ? e.duration_mins+'m' : '—'}</div></div>
+        <div class="detail-item"><div class="detail-label">SL</div><div class="detail-val" style="color:var(--red)">${e.sl_pts||'—'} pts</div></div>
+        <div class="detail-item"><div class="detail-label">TP</div><div class="detail-val" style="color:var(--green)">${e.tp_pts||'—'} pts</div></div>
+        <div class="detail-item"><div class="detail-label">RR</div><div class="detail-val" style="color:${e.rr>=2?'var(--green)':e.rr>=1?'var(--amber)':'var(--red)'}">${e.rr||'—'}</div></div>
+        <div class="detail-item"><div class="detail-label">Result</div><div class="detail-val">${e.result}</div></div>
+        <div class="detail-item"><div class="detail-label">Timeframe</div><div class="detail-val">${e.entry_tf||'—'}</div></div>
+        <div class="detail-item"><div class="detail-label">Exit</div><div class="detail-val">${e.exit_time||'—'}</div></div>
+      </div>
+      ${e.mental_pre||e.mental_during||e.mental_entry||e.mental_trade ? `
+      <div style="margin-bottom:14px">
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Mental</div>
+        ${e.mental_pre ? `<div class="mental-section"><div class="mental-label">Pre-session</div><div class="mental-text">${e.mental_pre}</div></div>` : ''}
+        ${e.mental_during ? `<div class="mental-section"><div class="mental-label">During session</div><div class="mental-text">${e.mental_during}</div></div>` : ''}
+        ${e.mental_entry ? `<div class="mental-section"><div class="mental-label">Right before entry</div><div class="mental-text">${e.mental_entry}</div></div>` : ''}
+        ${e.mental_trade ? `<div class="mental-section"><div class="mental-label">During trade</div><div class="mental-text">${e.mental_trade}</div></div>` : ''}
+      </div>` : ''}
+      ${e.notes_good||e.notes_bad||e.notes_lesson ? `
+      <div>
+        <div style="font-size:11px;color:var(--muted);text-transform:uppercase;margin-bottom:8px">Notes</div>
+        ${e.notes_good ? `<div class="mental-section"><div class="mental-label">What went well</div><div class="mental-text">${e.notes_good}</div></div>` : ''}
+        ${e.notes_bad ? `<div class="mental-section"><div class="mental-label">What to improve</div><div class="mental-text">${e.notes_bad}</div></div>` : ''}
+        ${e.notes_lesson ? `<div class="mental-section"><div class="mental-label">Key lesson</div><div class="mental-text">${e.notes_lesson}</div></div>` : ''}
+      </div>` : ''}
+      <div style="margin-top:14px"><button class="btn btn-danger" onclick="deleteEntry(${e.id})">Delete entry</button></div>
+    </div>
+  </div>`;
+}
+
+function toggleEntry(el) {
+  const body = el.nextElementSibling;
+  body.classList.toggle('open');
+  const arrow = el.querySelector('span:last-child');
+  arrow.style.transform = body.classList.contains('open') ? 'rotate(90deg)' : '';
+}
+
+async function deleteEntry(id) {
+  if (!confirm('Delete this entry?')) return;
+  await sb.from('journal_entries').delete().eq('id', id);
+  loadAllEntries();
+}
+
+function getWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  date.setUTCDate(date.getUTCDate() + 4 - (date.getUTCDay()||7));
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(),0,1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1)/7);
+}
+
+function renderStats() {
+  const el = document.getElementById('stats-content');
+  const t = allEntries;
+  if (!t.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📊</div>No entries yet.</div>'; return; }
+
+  const wins = t.filter(x=>x.result==='Win');
+  const losses = t.filter(x=>x.result==='Loss');
+  const bes = t.filter(x=>x.result==='BE');
+  const wr = ((wins.length/t.length)*100).toFixed(1);
+  const avgRR = t.filter(x=>x.rr>0).length ? (t.filter(x=>x.rr>0).reduce((s,x)=>s+x.rr,0)/t.filter(x=>x.rr>0).length).toFixed(2) : '—';
+  const bestRR = t.filter(x=>x.rr>0).length ? Math.max(...t.filter(x=>x.rr>0).map(x=>x.rr)).toFixed(2) : '—';
+  const avgWinRR = wins.filter(x=>x.rr>0).length ? (wins.filter(x=>x.rr>0).reduce((s,x)=>s+x.rr,0)/wins.filter(x=>x.rr>0).length).toFixed(2) : '—';
+
+  // Week stats
+  const byWeek = {};
+  t.forEach(e => {
+    const d = new Date(e.trade_date+'T12:00:00');
+    const key = `${d.getFullYear()}-W${getWeekNumber(d)}`;
+    (byWeek[key] = byWeek[key]||[]).push(e);
+  });
+
+  // Month stats
+  const byMonth = {};
+  t.forEach(e => {
+    const key = e.trade_date.substring(0,7);
+    (byMonth[key] = byMonth[key]||[]).push(e);
+  });
+
+  // Trade number stats
+  const byTradeNum = {};
+  t.forEach(e => {
+    const n = e.trade_num || 1;
+    (byTradeNum[n] = byTradeNum[n]||[]).push(e);
+  });
+
+  // Win after win/loss
+  const sortedDates = [...new Set(t.map(x=>x.trade_date))].sort();
+  let winAfterWin=0,winAfterLoss=0,totalAfterWin=0,totalAfterLoss=0;
+  sortedDates.forEach(date => {
+    const day = t.filter(x=>x.trade_date===date).sort((a,b)=>a.trade_num-b.trade_num);
+    for(let i=1;i<day.length;i++){
+      if(day[i-1].result==='Win'){totalAfterWin++;if(day[i].result==='Win')winAfterWin++;}
+      if(day[i-1].result==='Loss'){totalAfterLoss++;if(day[i].result==='Win')winAfterLoss++;}
+    }
+  });
+
+  function brow(label,arr){
+    const w=arr.filter(x=>x.result==='Win').length;
+    const wr2=Math.round((w/arr.length)*100);
+    const avgR=arr.filter(x=>x.rr>0).length?(arr.filter(x=>x.rr>0).reduce((s,x)=>s+x.rr,0)/arr.filter(x=>x.rr>0).length).toFixed(2):'—';
+    return `<div class="breakdown-row">
+      <span style="font-weight:500">${label}</span>
+      <span style="color:var(--muted);font-size:12px">${arr.length} trades</span>
+      <span style="color:var(--muted);font-size:12px">Avg RR: ${avgR}</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="bar-track"><div class="bar-fill" style="width:${wr2}%;background:${wr2>=50?'var(--green)':'var(--red)'}"></div></div>
+        <strong style="color:${wr2>=50?'var(--green)':'var(--red)'};font-size:13px;min-width:38px">${wr2}%</strong>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML = `
+  <div class="stat-section">Overall</div>
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-label">Total trades</div><div class="metric-val blue">${t.length}</div></div>
+    <div class="metric"><div class="metric-label">Win rate</div><div class="metric-val ${parseFloat(wr)>=50?'green':'red'}">${wr}%</div></div>
+    <div class="metric"><div class="metric-label">Avg RR</div><div class="metric-val">${avgRR}</div></div>
+    <div class="metric"><div class="metric-label">Best RR</div><div class="metric-val green">${bestRR}R</div></div>
+  </div>
+  <div class="metric-grid">
+    <div class="metric"><div class="metric-label">Wins</div><div class="metric-val green">${wins.length}</div></div>
+    <div class="metric"><div class="metric-label">Losses</div><div class="metric-val red">${losses.length}</div></div>
+    <div class="metric"><div class="metric-label">Breakevens</div><div class="metric-val amber">${bes.length}</div></div>
+    <div class="metric"><div class="metric-label">Avg win RR</div><div class="metric-val green">${avgWinRR}</div></div>
+  </div>
+
+  <div class="stat-section">Win rate by trade number in session</div>
+  <div class="card">${Object.keys(byTradeNum).length ? Object.entries(byTradeNum).sort((a,b)=>a[0]-b[0]).map(([n,arr])=>brow(`Trade ${n}`,arr)).join('') : '<div style="color:var(--muted);font-size:13px">No data yet.</div>'}</div>
+
+  <div class="stat-section">If first trade wins, what is win rate on second trade?</div>
+  <div class="metric-grid-2">
+    <div class="metric"><div class="metric-label">Win rate after a Win</div><div class="metric-val ${totalAfterWin>0&&(winAfterWin/totalAfterWin)>=0.5?'green':'red'}">${totalAfterWin>0?((winAfterWin/totalAfterWin)*100).toFixed(0)+'%':'—'}</div></div>
+    <div class="metric"><div class="metric-label">Win rate after a Loss</div><div class="metric-val ${totalAfterLoss>0&&(winAfterLoss/totalAfterLoss)>=0.5?'green':'red'}">${totalAfterLoss>0?((winAfterLoss/totalAfterLoss)*100).toFixed(0)+'%':'—'}</div></div>
+  </div>
+
+  <div class="stat-section">Weekly win rates</div>
+  <div class="card">${Object.keys(byWeek).length ? Object.entries(byWeek).sort((a,b)=>b[0].localeCompare(a[0])).slice(0,12).map(([w,arr])=>{
+    const parts=w.split('-W');
+    const weekLabel=`Week ${parts[1]}, ${parts[0]}`;
+    const avgR=arr.filter(x=>x.rr>0).length?(arr.filter(x=>x.rr>0).reduce((s,x)=>s+x.rr,0)/arr.filter(x=>x.rr>0).length).toFixed(2):'—';
+    return brow(weekLabel,arr);
+  }).join('') : '<div style="color:var(--muted);font-size:13px">No data yet.</div>'}</div>
+
+  <div class="stat-section">Monthly win rates</div>
+  <div class="card">${Object.keys(byMonth).length ? Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0])).map(([m,arr])=>{
+    const [y,mo]=m.split('-');
+    const label=new Date(y,mo-1).toLocaleDateString('en-US',{month:'long',year:'numeric'});
+    return brow(label,arr);
+  }).join('') : '<div style="color:var(--muted);font-size:13px">No data yet.</div>'}</div>
+
+  <div class="stat-section">Average RR</div>
+  <div class="metric-grid-3">
+    <div class="metric"><div class="metric-label">All-time avg RR</div><div class="metric-val">${avgRR}</div></div>
+    <div class="metric"><div class="metric-label">This week avg RR</div><div class="metric-val">${(()=>{const wk=Object.entries(byWeek).sort((a,b)=>b[0].localeCompare(a[0]))[0];if(!wk)return'—';const arr=wk[1].filter(x=>x.rr>0);return arr.length?(arr.reduce((s,x)=>s+x.rr,0)/arr.length).toFixed(2):'—';})()}</div></div>
+    <div class="metric"><div class="metric-label">This month avg RR</div><div class="metric-val">${(()=>{const mk=Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0]))[0];if(!mk)return'—';const arr=mk[1].filter(x=>x.rr>0);return arr.length?(arr.reduce((s,x)=>s+x.rr,0)/arr.length).toFixed(2):'—';})()}</div></div>
+  </div>`;
+}
+
+function renderCharts() {
+  const el = document.getElementById('charts-content');
+  if (!allEntries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">📈</div>No entries yet.</div>'; return; }
+  Object.values(chartInstances).forEach(c=>{try{c.destroy()}catch(e){}});chartInstances={};
+
+  const sorted = [...allEntries].sort((a,b)=>a.trade_date.localeCompare(b.trade_date)||a.trade_num-b.trade_num);
+  const labels = sorted.map((e,i)=>`#${i+1}`);
+  const rrVals = sorted.map(e=>e.rr||0);
+  const rrColors = sorted.map(e=>e.result==='Win'?'#00C853':e.result==='Loss'?'#F85149':'#F0B429');
+
+  const byWeek={};const byMonth={};
+  sorted.forEach(e=>{
+    const d=new Date(e.trade_date+'T12:00:00');
+    const wk=`W${getWeekNumber(d)}`;
+    const mo=d.toLocaleDateString('en-US',{month:'short'});
+    (byWeek[wk]=byWeek[wk]||[]).push(e);
+    (byMonth[mo]=byMonth[mo]||[]).push(e);
+  });
+
+  const timeLabels=[...new Set(sorted.filter(e=>e.entry_time).map(e=>e.entry_time.substring(0,5)))].sort();
+  const timeCounts=timeLabels.map(t=>sorted.filter(e=>e.entry_time?.startsWith(t)).length);
+
+  const durBuckets={'<5min':0,'5-10min':0,'10-20min':0,'20-30min':0,'>30min':0};
+  sorted.forEach(e=>{
+    const d=e.duration_mins;
+    if(!d)return;
+    if(d<5)durBuckets['<5min']++;
+    else if(d<10)durBuckets['5-10min']++;
+    else if(d<20)durBuckets['10-20min']++;
+    else if(d<30)durBuckets['20-30min']++;
+    else durBuckets['>30min']++;
+  });
+
+  el.innerHTML=`
+  <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">RR per trade</div><div class="chart-wrap" style="height:220px"><canvas id="ch-rr"></canvas></div></div>
+  <div class="chart-grid">
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Weekly win rate</div><div class="chart-wrap" style="height:200px"><canvas id="ch-wwr"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Monthly win rate</div><div class="chart-wrap" style="height:200px"><canvas id="ch-mwr"></canvas></div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Entry times</div><div class="chart-wrap" style="height:200px"><canvas id="ch-time"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Trade duration distribution</div><div class="chart-wrap" style="height:200px"><canvas id="ch-dur"></canvas></div></div>
+  </div>
+  <div class="chart-grid">
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Weekly avg RR</div><div class="chart-wrap" style="height:200px"><canvas id="ch-wrr"></canvas></div></div>
+    <div class="card"><div class="card-title" style="font-size:13px;font-weight:500;color:var(--muted);margin-bottom:12px">Monthly avg RR</div><div class="chart-wrap" style="height:200px"><canvas id="ch-mrr"></canvas></div></div>
+  </div>`;
+
+  const tc='#8B949E',gc='#21262D';
+  const base={responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},scales:{x:{ticks:{color:tc,font:{size:10}},grid:{color:gc}},y:{ticks:{color:tc,font:{size:10}},grid:{color:gc}}}};
+
+  setTimeout(()=>{
+    chartInstances.rr=new Chart(document.getElementById('ch-rr'),{type:'bar',data:{labels,datasets:[{data:rrVals,backgroundColor:rrColors,borderRadius:3}]},options:{...base,scales:{...base.scales,x:{...base.scales.x,ticks:{...base.scales.x.ticks,autoSkip:true,maxRotation:0}},y:{...base.scales.y,ticks:{...base.scales.y.ticks,callback:v=>v+'R'}}}}});
+
+    const wwrLabels=Object.keys(byWeek);
+    const wwrData=wwrLabels.map(w=>{const arr=byWeek[w];return Math.round((arr.filter(e=>e.result==='Win').length/arr.length)*100);});
+    chartInstances.wwr=new Chart(document.getElementById('ch-wwr'),{type:'bar',data:{labels:wwrLabels,datasets:[{data:wwrData,backgroundColor:wwrData.map(v=>v>=50?'#00C853':'#F85149'),borderRadius:3}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,min:0,max:100,ticks:{...base.scales.y.ticks,callback:v=>v+'%'}}}}});
+
+    const mwrLabels=Object.keys(byMonth);
+    const mwrData=mwrLabels.map(m=>{const arr=byMonth[m];return Math.round((arr.filter(e=>e.result==='Win').length/arr.length)*100);});
+    chartInstances.mwr=new Chart(document.getElementById('ch-mwr'),{type:'bar',data:{labels:mwrLabels,datasets:[{data:mwrData,backgroundColor:mwrData.map(v=>v>=50?'#00C853':'#F85149'),borderRadius:3}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,min:0,max:100,ticks:{...base.scales.y.ticks,callback:v=>v+'%'}}}}});
+
+    chartInstances.time=new Chart(document.getElementById('ch-time'),{type:'bar',data:{labels:timeLabels,datasets:[{data:timeCounts,backgroundColor:'#58A6FF',borderRadius:3}]},options:{...base,scales:{...base.scales,x:{...base.scales.x,ticks:{...base.scales.x.ticks,autoSkip:true,maxRotation:45}}}}});
+
+    chartInstances.dur=new Chart(document.getElementById('ch-dur'),{type:'doughnut',data:{labels:Object.keys(durBuckets),datasets:[{data:Object.values(durBuckets),backgroundColor:['#00C853','#58A6FF','#F0B429','#F85149','#8B949E']}]},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'right',labels:{color:tc,font:{size:11}}}}}});
+
+    const wrrData=wwrLabels.map(w=>{const arr=byWeek[w].filter(e=>e.rr>0);return arr.length?(arr.reduce((s,e)=>s+e.rr,0)/arr.length).toFixed(2):0;});
+    chartInstances.wrr=new Chart(document.getElementById('ch-wrr'),{type:'line',data:{labels:wwrLabels,datasets:[{data:wrrData,borderColor:'#00C853',backgroundColor:'rgba(0,200,83,0.08)',pointRadius:4,tension:0.2,fill:true}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,ticks:{...base.scales.y.ticks,callback:v=>v+'R'}}}}});
+
+    const mrrData=mwrLabels.map(m=>{const arr=byMonth[m].filter(e=>e.rr>0);return arr.length?(arr.reduce((s,e)=>s+e.rr,0)/arr.length).toFixed(2):0;});
+    chartInstances.mrr=new Chart(document.getElementById('ch-mrr'),{type:'line',data:{labels:mwrLabels,datasets:[{data:mrrData,borderColor:'#58A6FF',backgroundColor:'rgba(88,166,255,0.08)',pointRadius:4,tension:0.2,fill:true}]},options:{...base,scales:{...base.scales,y:{...base.scales.y,ticks:{...base.scales.y.ticks,callback:v=>v+'R'}}}}});
+  },50);
+}
+
+function renderConfluence() {
+  const el = document.getElementById('confluence-content');
+  if (!allEntries.length) { el.innerHTML = '<div class="empty"><div class="empty-icon">🔗</div>No entries yet.</div>'; return; }
+
+  const confStats={};const dolStats={};
+  allEntries.forEach(e=>{
+    const confs=[...(e.confluences||[]),...(e.conf_other?[e.conf_other]:[])];
+    const dols=[...(e.dols||[]),...(e.dol_other?[e.dol_other]:[])];
+    confs.forEach(c=>{confStats[c]=confStats[c]||{total:0,wins:0};confStats[c].total++;if(e.result==='Win')confStats[c].wins++;});
+    dols.forEach(d=>{dolStats[d]=dolStats[d]||{total:0,wins:0};dolStats[d].total++;if(e.result==='Win')dolStats[d].wins++;});
+  });
+
+  function confRow(label,d){
+    const wr=Math.round((d.wins/d.total)*100);
+    return `<div class="breakdown-row">
+      <span style="font-weight:500">${label}</span>
+      <span style="color:var(--muted);font-size:12px">${d.wins}/${d.total} trades</span>
+      <div style="display:flex;align-items:center;gap:8px">
+        <div class="bar-track"><div class="bar-fill" style="width:${wr}%;background:${wr>=50?'var(--green)':'var(--red)'}"></div></div>
+        <strong style="color:${wr>=50?'var(--green)':'var(--red)'};font-size:13px;min-width:38px">${wr}%</strong>
+      </div>
+    </div>`;
+  }
+
+  el.innerHTML=`
+  <div class="stat-section">Confluence win rates (when this confluence was present)</div>
+  <div class="card">${Object.keys(confStats).length?Object.entries(confStats).sort((a,b)=>(b[1].wins/b[1].total)-(a[1].wins/a[1].total)).map(([k,v])=>confRow(k,v)).join(''):'<div style="color:var(--muted)">No confluence data yet.</div>'}</div>
+  <div class="stat-section">DOL win rates (when this DOL was targeted)</div>
+  <div class="card">${Object.keys(dolStats).length?Object.entries(dolStats).sort((a,b)=>(b[1].wins/b[1].total)-(a[1].wins/a[1].total)).map(([k,v])=>confRow(k,v)).join(''):'<div style="color:var(--muted)">No DOL data yet.</div>'}</div>`;
+}
+</script>
+</body>
+</html>
